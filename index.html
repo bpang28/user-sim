@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cohort Sim - Simulation Studio</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+  :root {
+    --paper: #FAF9F6;
+    --panel: #FFFFFF;
+    --ink: #16150F;
+    --muted: #716D62;
+    --hairline: #E6E3DA;
+    --field: #F3F1EA;
+    --amber: #C4761F;
+    --amber-soft: #F4E4CC;
+    --mono: 'IBM Plex Mono', ui-monospace, monospace;
+    --sans: 'Space Grotesk', system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--paper); color: var(--ink); font-family: var(--sans); }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 0 28px 80px; }
+
+  /* ---------- header ---------- */
+  header {
+    padding: 44px 0 28px;
+    border-bottom: 1px solid var(--ink);
+    display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap;
+  }
+  .brand h1 { font-size: clamp(26px, 3.4vw, 40px); font-weight: 600; letter-spacing: -0.02em; line-height: 1.05; }
+  .brand h1 .thin { font-weight: 400; color: var(--muted); }
+  .brand p { margin-top: 10px; color: var(--muted); font-size: 14px; max-width: 52ch; line-height: 1.5; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 12px;
+  }
+
+  .cohort-strip { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  .glyphs { display: flex; gap: 7px; flex-wrap: wrap; justify-content: flex-end; max-width: 300px; }
+  .glyph {
+    width: 22px; height: 22px; border-radius: 50%;
+    border: 1.5px solid var(--ink);
+    position: relative; transition: transform .25s ease, box-shadow .25s ease;
+  }
+  .glyph::after { content: ''; position: absolute; border-radius: 50%; background: var(--ink); }
+  .glyph.v0::after { inset: 6px; }
+  .glyph.v1::after { inset: 8px 3px 3px 8px; }
+  .glyph.v2::after { inset: 3px 8px 8px 3px; background: var(--amber); }
+  .glyph.v3 { border-style: dashed; } .glyph.v3::after { inset: 7px; background: var(--muted); }
+  .glyph.v4::after { inset: 5px; background: transparent; border: 1.5px solid var(--amber); }
+  .glyph.v5::after { inset: 9px; }
+  .glyph.active { transform: translateY(-3px); box-shadow: 0 0 0 3px var(--amber-soft); border-color: var(--amber); }
+  .glyph.done { border-color: var(--amber); }
+  .glyph.done::after { background: var(--amber); }
+  .cohort-label { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 0.08em; }
+  .cohort-label b { color: var(--amber); font-weight: 500; }
+
+  /* ---------- layout ---------- */
+  .grid { display: grid; grid-template-columns: minmax(380px, 5fr) minmax(380px, 6fr); }
+  .col-form { border-right: 1px solid var(--hairline); padding: 32px 32px 32px 0; }
+  .col-out { padding: 32px 0 32px 32px; }
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: 1fr; }
+    .col-form { border-right: none; border-bottom: 1px solid var(--hairline); padding: 28px 0; }
+    .col-out { padding: 28px 0; }
+    .cohort-strip { align-items: flex-start; }
+    .glyphs { justify-content: flex-start; }
+  }
+
+  /* ---------- form ---------- */
+  fieldset { border: none; margin-bottom: 34px; }
+  legend {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+    padding-bottom: 14px; display: flex; align-items: center; gap: 10px; width: 100%;
+  }
+  legend::after { content: ''; flex: 1; height: 1px; background: var(--hairline); }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 560px) { .row { grid-template-columns: 1fr; } }
+  .fld { margin-bottom: 14px; }
+  .fld label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+  .fld .hint { font-weight: 400; color: var(--muted); font-size: 12px; }
+  input[type=text], textarea, select {
+    width: 100%; background: var(--field); border: 1px solid transparent; border-radius: 6px;
+    padding: 10px 12px; font-family: var(--sans); font-size: 14px; color: var(--ink);
+    transition: border-color .15s, background .15s;
+  }
+  textarea { resize: vertical; min-height: 64px; line-height: 1.45; }
+  input:focus, textarea:focus, select:focus {
+    outline: none; border-color: var(--amber); background: #fff;
+    box-shadow: 0 0 0 3px var(--amber-soft);
+  }
+  ::placeholder { color: #A8A499; }
+
+  .seg { display: flex; border: 1px solid var(--hairline); border-radius: 6px; overflow: hidden; width: fit-content; }
+  .seg button {
+    background: var(--panel); border: none; padding: 9px 16px; font-family: var(--sans);
+    font-size: 13px; color: var(--muted); cursor: pointer; border-right: 1px solid var(--hairline);
+    transition: background .15s, color .15s;
+  }
+  .seg button:last-child { border-right: none; }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+  .seg button:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px; }
+
+  .stepper { display: flex; align-items: center; gap: 12px; }
+  .stepper button {
+    width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--ink); background: var(--panel);
+    font-size: 17px; cursor: pointer; line-height: 1; color: var(--ink); font-family: var(--mono);
+    transition: background .15s, color .15s;
+  }
+  .stepper button:hover { background: var(--ink); color: var(--paper); }
+  .stepper button:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+  .stepper .n { font-family: var(--mono); font-size: 20px; min-width: 2ch; text-align: center; }
+
+  .form-actions { display: flex; gap: 10px; margin-top: 4px; }
+  .btn-ghost {
+    background: none; border: 1px solid var(--hairline); border-radius: 6px; padding: 9px 14px;
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.06em; color: var(--muted); cursor: pointer;
+    transition: border-color .15s, color .15s;
+  }
+  .btn-ghost:hover { border-color: var(--ink); color: var(--ink); }
+  .btn-ghost:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+  /* ---------- output ---------- */
+  .out-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 12px; flex-wrap: wrap; }
+  .out-head .eyebrow { margin: 0; }
+  .out-actions { display: flex; gap: 10px; }
+  .btn-solid {
+    background: var(--ink); color: var(--paper); border: 1px solid var(--ink); border-radius: 6px;
+    padding: 10px 20px; font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em;
+    cursor: pointer; transition: background .15s, transform .1s;
+  }
+  .btn-solid:hover { background: #2C2A22; }
+  .btn-solid:active { transform: scale(0.98); }
+  .btn-solid.copied { background: var(--amber); border-color: var(--amber); }
+  .btn-solid:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+  .btn-run { background: var(--amber); border-color: var(--amber); }
+  .btn-run:hover { background: #A9620F; }
+  .btn-run:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .prompt-box {
+    background: var(--ink); color: #DDD9CE; border-radius: 10px;
+    padding: 24px; font-family: var(--mono); font-size: 12px; line-height: 1.65;
+    white-space: pre-wrap; word-break: break-word;
+    max-height: 56vh; overflow-y: auto;
+  }
+  .prompt-box .filled { color: #F5C87C; }
+  .prompt-box .blank { color: #7C786C; font-style: italic; }
+  .charcount { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 10px; text-align: right; }
+
+  /* ---------- run / results ---------- */
+  .run-section { margin-top: 48px; border-top: 1px solid var(--ink); padding-top: 32px; }
+  .run-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+  .status {
+    font-family: var(--mono); font-size: 12px; color: var(--muted);
+    display: flex; align-items: center; gap: 10px; min-height: 20px;
+  }
+  .status .pulse {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--amber);
+    animation: pulse 1.1s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 0.25; } 50% { opacity: 1; } }
+  .status.error { color: #A43D2A; }
+
+  .caveat {
+    background: var(--amber-soft); border: 1px solid var(--amber); border-radius: 8px;
+    padding: 12px 16px; font-size: 13px; line-height: 1.5; color: #6B430F; margin-bottom: 22px;
+  }
+
+  .persona-card {
+    border: 1px solid var(--hairline); border-radius: 10px; background: var(--panel);
+    margin-bottom: 14px; overflow: hidden;
+  }
+  .persona-card summary {
+    cursor: pointer; padding: 16px 20px; list-style: none;
+    display: flex; align-items: center; gap: 14px; font-weight: 500; font-size: 15px;
+  }
+  .persona-card summary::-webkit-details-marker { display: none; }
+  .persona-card summary:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px; }
+  .persona-card summary .idx {
+    font-family: var(--mono); font-size: 11px; color: var(--amber);
+    border: 1px solid var(--amber); border-radius: 50%; width: 26px; height: 26px;
+    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .persona-card summary .meta { color: var(--muted); font-weight: 400; font-size: 13px; }
+  .persona-card summary .chev { margin-left: auto; font-family: var(--mono); color: var(--muted); }
+  .persona-card[open] summary .chev { transform: rotate(90deg); }
+  .persona-body { padding: 4px 20px 20px 60px; }
+  @media (max-width: 560px) { .persona-body { padding-left: 20px; } }
+
+  .synthesis {
+    border: 1.5px solid var(--ink); border-radius: 10px; background: var(--panel);
+    padding: 26px 28px; margin-top: 26px;
+  }
+  .synthesis .eyebrow { color: var(--amber); }
+
+  .md { font-size: 14px; line-height: 1.65; color: #2E2C24; }
+  .md h1, .md h2, .md h3 { font-size: 14px; font-weight: 600; margin: 16px 0 6px; color: var(--ink); }
+  .md p { margin: 8px 0; }
+  .md ul, .md ol { margin: 8px 0 8px 20px; }
+  .md li { margin: 4px 0; }
+  .md strong { font-weight: 600; }
+  .md code { font-family: var(--mono); font-size: 12px; background: var(--field); padding: 1px 5px; border-radius: 4px; }
+  .md hr { border: none; border-top: 1px solid var(--hairline); margin: 14px 0; }
+
+  /* ---------- notes ---------- */
+  .notes { margin-top: 48px; border-top: 1px solid var(--ink); padding-top: 32px; }
+  .notes details { border-bottom: 1px solid var(--hairline); }
+  .notes summary {
+    cursor: pointer; padding: 18px 0; font-weight: 500; font-size: 15px;
+    display: flex; align-items: center; justify-content: space-between; list-style: none;
+  }
+  .notes summary::-webkit-details-marker { display: none; }
+  .notes summary::after { content: '+'; font-family: var(--mono); color: var(--muted); font-size: 18px; }
+  .notes details[open] summary::after { content: '\2212'; }
+  .notes summary:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+  .note-body { padding: 0 0 22px; color: #3D3B33; font-size: 14px; line-height: 1.65; max-width: 72ch; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <div class="eyebrow">User Interaction Simulation</div>
+      <h1>Cohort Sim <span class="thin">/ simulation studio</span></h1>
+      <p>Describe a product and an audience, then run the simulation. Claude generates a cohort of distinct synthetic users, walks each one through your product, and synthesizes where they hit friction.</p>
+    </div>
+    <div class="cohort-strip" aria-hidden="true">
+      <div class="glyphs" id="glyphs"></div>
+      <div class="cohort-label">cohort of <b id="glyphCount">8</b> distinct personas</div>
+    </div>
+  </header>
+
+  <div class="grid">
+
+    <!-- ============ FORM ============ -->
+    <div class="col-form">
+      <fieldset>
+        <legend>Product</legend>
+        <div class="fld">
+          <label for="pName">Name</label>
+          <input type="text" id="pName" data-key="product_name" placeholder="e.g. PulsePad blood pressure monitor">
+        </div>
+        <div class="fld">
+          <label>Type</label>
+          <div class="seg" role="group" aria-label="Product type" id="pType">
+            <button type="button" data-val="hardware" aria-pressed="false">Hardware</button>
+            <button type="button" data-val="software" aria-pressed="false">Software</button>
+            <button type="button" data-val="hybrid" aria-pressed="false">Hybrid</button>
+          </div>
+        </div>
+        <div class="fld">
+          <label for="pDesc">Description <span class="hint">1 to 3 sentences on what it does</span></label>
+          <textarea id="pDesc" data-key="description" placeholder="A home blood pressure cuff that syncs readings to a companion phone app."></textarea>
+        </div>
+        <div class="fld">
+          <label for="pFlow">Core interaction flow <span class="hint">the main tasks a user performs</span></label>
+          <textarea id="pFlow" data-key="core_flow" placeholder="Unbox device, pair via Bluetooth, complete setup wizard, take a daily reading."></textarea>
+        </div>
+        <div class="fld">
+          <label for="pCons">Known constraints <span class="hint">screen size, price, required literacy, physical requirements; leave blank if none</span></label>
+          <textarea id="pCons" data-key="constraints" placeholder="1.2 inch display, $89 price point, requires smartphone with Bluetooth."></textarea>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Audience</legend>
+        <div class="row">
+          <div class="fld">
+            <label for="aAge">Age range</label>
+            <input type="text" id="aAge" data-key="age_range" placeholder="e.g. 65 to 80">
+          </div>
+          <div class="fld">
+            <label for="aOcc">Occupation(s)</label>
+            <input type="text" id="aOcc" data-key="occupations" placeholder="e.g. retired, part-time retail">
+          </div>
+        </div>
+        <div class="fld">
+          <label for="aMed">Medical / accessibility conditions <span class="hint">only ones relevant to product interaction</span></label>
+          <input type="text" id="aMed" data-key="conditions" placeholder="e.g. mild arthritis, low vision">
+        </div>
+        <div class="fld">
+          <label>Tech literacy</label>
+          <div class="seg" role="group" aria-label="Tech literacy" id="aTech">
+            <button type="button" data-val="low" aria-pressed="false">Low</button>
+            <button type="button" data-val="medium" aria-pressed="false">Medium</button>
+            <button type="button" data-val="high" aria-pressed="false">High</button>
+          </div>
+        </div>
+        <div class="row">
+          <div class="fld">
+            <label for="aLang">Language / locale</label>
+            <input type="text" id="aLang" data-key="locale" placeholder="e.g. English, US Midwest">
+          </div>
+          <div class="fld">
+            <label for="aOther">Other relevant traits</label>
+            <input type="text" id="aOther" data-key="other_traits" placeholder="income, household, motivation...">
+          </div>
+        </div>
+        <div class="fld">
+          <label for="nMinus">Cohort size <span class="hint">2 to 12 personas per run</span></label>
+          <div class="stepper">
+            <button type="button" id="nMinus" aria-label="Decrease cohort size">&minus;</button>
+            <span class="n" id="nVal">8</span>
+            <button type="button" id="nPlus" aria-label="Increase cohort size">+</button>
+          </div>
+        </div>
+      </fieldset>
+
+      <div class="form-actions">
+        <button type="button" class="btn-ghost" id="btnExample">Load example</button>
+        <button type="button" class="btn-ghost" id="btnClear">Clear all</button>
+      </div>
+    </div>
+
+    <!-- ============ OUTPUT ============ -->
+    <div class="col-out">
+      <div class="out-head">
+        <div class="eyebrow">Assembled prompt</div>
+        <div class="out-actions">
+          <button type="button" class="btn-solid" id="btnCopy">Copy prompt</button>
+          <button type="button" class="btn-solid btn-run" id="btnRun">Run simulation</button>
+        </div>
+      </div>
+      <div class="prompt-box" id="promptBox" tabindex="0" aria-label="Assembled prompt preview"></div>
+      <div class="charcount" id="charCount"></div>
+      <div class="fld" style="margin-top:16px">
+        <label for="apiKey">Anthropic API key <span class="hint">only needed when running this file outside claude.ai; kept in this page only, sent nowhere except api.anthropic.com</span></label>
+        <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off">
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ RESULTS ============ -->
+  <div class="run-section" id="runSection" hidden>
+    <div class="run-head">
+      <div class="eyebrow" style="margin:0">Simulation results</div>
+      <div class="status" id="status"></div>
+    </div>
+    <div class="caveat">These results are a simulated estimate based on modeled reasoning, not observed behavioral data. Use them to generate hypotheses for real user testing with the actual population, not as a substitute for it.</div>
+    <div id="personaResults"></div>
+    <div class="synthesis" id="synthesisCard" hidden>
+      <div class="eyebrow">Synthesis across the cohort</div>
+      <div class="md" id="synthesisBody"></div>
+    </div>
+  </div>
+
+  <!-- ============ NOTES ============ -->
+  <div class="notes">
+    <div class="eyebrow">Why the simulation is built this way</div>
+    <details>
+      <summary>Forces diversity within the cohort</summary>
+      <div class="note-body"><p>A single "average user" simulation smooths over exactly the edge cases that matter most for accessibility testing, like a specific medical condition interacting with a specific UI element. Generating N distinct personas with varied secondary traits pushes the model to surface those.</p></div>
+    </details>
+    <details>
+      <summary>One walkthrough call per persona</summary>
+      <div class="note-body"><p>Each persona gets a dedicated model call for their step-by-step walkthrough. This keeps every walkthrough grounded in that persona's specific traits and produces trait-linked friction points ("small tap targets plus arthritis") instead of generic UX platitudes.</p></div>
+    </details>
+    <details>
+      <summary>Synthesis separates signal from noise</summary>
+      <div class="note-body"><p>A final pass splits common issues from outlier issues and ranks the design changes that would most reduce friction. That is usually what you actually want out of a simulation like this: where to prioritize fixes.</p></div>
+    </details>
+    <details>
+      <summary>Built-in epistemic caveat</summary>
+      <div class="note-body"><p>The caveat banner and the synthesis prompt both keep the output honest about being a hypothesis generator, not a replacement for real usability testing with the actual population. That matters more here than in most simulations, since real people's health and demographic traits are being modeled.</p></div>
+    </details>
+    <details>
+      <summary>Suggested usage pattern</summary>
+      <div class="note-body"><p>Run the simulation multiple times with different cohort sizes or slightly perturbed audience parameters (a narrower age band, an added condition) and compare the results. That is often more useful than a single large run, since it shows which findings are stable and which are parameter-sensitive.</p></div>
+    </details>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  var state = {
+    product_name: '', product_type: '', description: '', core_flow: '', constraints: '',
+    age_range: '', occupations: '', conditions: '', tech_literacy: '', locale: '',
+    other_traits: '', n: 8
+  };
+
+  var placeholders = {
+    product_name: '{product_name}',
+    product_type: '{hardware | software | hybrid}',
+    description: '{1-3 sentence description of what it does}',
+    core_flow: '{the main task(s) a user performs, e.g. "unbox device, pair via Bluetooth, complete setup wizard, use daily"}',
+    constraints: '{screen size, price point, required literacy, physical requirements, etc.; leave blank if none}',
+    age_range: '{e.g. 65-80}',
+    occupations: '{e.g. retired, part-time retail}',
+    conditions: '{e.g. mild arthritis, low vision; only include conditions actually relevant to product interaction; leave blank if not applicable}',
+    tech_literacy: '{low | medium | high, or describe}',
+    locale: '{primary language, region}',
+    other_traits: '{income bracket, household context, prior product familiarity, motivation for using the product, etc.}'
+  };
+
+  function esc(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  function val(key) {
+    var v = (state[key] || '').trim();
+    return v || placeholders[key];
+  }
+  function slot(key) {
+    var v = (state[key] || '').trim();
+    if (v) return '<span class="filled">' + esc(v) + '</span>';
+    return '<span class="blank">' + esc(placeholders[key]) + '</span>';
+  }
+
+  function productBlock() {
+    return '<product>\n' +
+      'Name: ' + val('product_name') + '\n' +
+      'Type: ' + val('product_type') + '\n' +
+      'Description: ' + val('description') + '\n' +
+      'Core interaction flow: ' + val('core_flow') + '\n' +
+      'Known constraints: ' + val('constraints') + '\n' +
+      '</product>';
+  }
+  function audienceBlock() {
+    return '<audience_parameters>\n' +
+      'Age range: ' + val('age_range') + '\n' +
+      'Occupation(s): ' + val('occupations') + '\n' +
+      'Relevant medical/accessibility conditions: ' + val('conditions') + '\n' +
+      'Tech literacy: ' + val('tech_literacy') + '\n' +
+      'Language/locale: ' + val('locale') + '\n' +
+      'Other relevant traits: ' + val('other_traits') + '\n' +
+      'Cohort size: ' + state.n + '\n' +
+      '</audience_parameters>';
+  }
+
+  var instructionsText = function (N) {
+    return '<instructions>\n' +
+'1. Generate ' + N + ' distinct synthetic personas consistent with the audience\n' +
+'   parameters above. Vary secondary traits (patience, prior experience,\n' +
+'   specific sub-condition severity, context of use) across personas so the\n' +
+'   cohort reflects realistic within-group diversity. Do not produce ' + N + '\n' +
+'   near-identical users.\n\n' +
+'2. For each persona, simulate a step-by-step walkthrough of the core\n' +
+'   interaction flow. At each step, reason explicitly about:\n' +
+'   - What the persona notices first\n' +
+'   - Where friction, confusion, or delay is likely, and why (tie this to a\n' +
+'     specific trait, e.g. "small tap targets + arthritis" rather than a\n' +
+'     generic "may struggle")\n' +
+'   - What they would do next (proceed, retry, abandon, seek help, misuse\n' +
+'     the feature)\n' +
+'   - Emotional/confidence state at the end of the step\n\n' +
+'3. After all personas are simulated, produce a synthesis with:\n' +
+'   - Common friction points (which appeared across multiple personas, and\n' +
+'     what fraction of the cohort hit them)\n' +
+'   - Persona-specific/outlier issues that a "typical user" test would miss\n' +
+'   - A ranked list of the top 3-5 design or accessibility changes that\n' +
+'     would most reduce friction across the cohort, with rationale\n' +
+'   - Explicit confidence caveat (see step 4)\n\n' +
+'4. Always state plainly: this is a simulated estimate based on modeled\n' +
+'   reasoning, not observed behavioral data, and should be used to generate\n' +
+'   hypotheses for real user testing, not as a substitute for it. Flag any\n' +
+'   assumptions you made where the audience parameters were ambiguous or\n' +
+'   underspecified.\n\n' +
+'5. Output format: structured Markdown with a persona-by-persona section\n' +
+'   followed by the synthesis section. Keep each persona walkthrough concise\n' +
+'   (bullet points, not prose paragraphs).\n' +
+'</instructions>';
+  };
+
+  function buildPlain() {
+    return 'You are a user-research simulation engine. Your job is to generate realistic,\n' +
+'evidence-grounded predictions of how a defined audience will interact with a\n' +
+'product, by simulating a cohort of distinct synthetic users and reasoning\n' +
+'through each one\'s likely behavior step by step.\n\n' +
+      productBlock() + '\n\n' + audienceBlock() + '\n\n' + instructionsText(state.n);
+  }
+
+  function buildHtml() {
+    var N = '<span class="filled">' + state.n + '</span>';
+    return esc('You are a user-research simulation engine. Your job is to generate realistic,\nevidence-grounded predictions of how a defined audience will interact with a\nproduct, by simulating a cohort of distinct synthetic users and reasoning\nthrough each one\'s likely behavior step by step.') + '\n\n' +
+      '&lt;product&gt;\n' +
+      'Name: ' + slot('product_name') + '\n' +
+      'Type: ' + slot('product_type') + '\n' +
+      'Description: ' + slot('description') + '\n' +
+      'Core interaction flow: ' + slot('core_flow') + '\n' +
+      'Known constraints: ' + slot('constraints') + '\n' +
+      '&lt;/product&gt;\n\n' +
+      '&lt;audience_parameters&gt;\n' +
+      'Age range: ' + slot('age_range') + '\n' +
+      'Occupation(s): ' + slot('occupations') + '\n' +
+      'Relevant medical/accessibility conditions: ' + slot('conditions') + '\n' +
+      'Tech literacy: ' + slot('tech_literacy') + '\n' +
+      'Language/locale: ' + slot('locale') + '\n' +
+      'Other relevant traits: ' + slot('other_traits') + '\n' +
+      'Cohort size: ' + N + '\n' +
+      '&lt;/audience_parameters&gt;\n\n' +
+      esc(instructionsText(state.n));
+  }
+
+  var box = document.getElementById('promptBox');
+  var charCount = document.getElementById('charCount');
+
+  function render() {
+    box.innerHTML = buildHtml();
+    charCount.textContent = buildPlain().length.toLocaleString() + ' characters';
+    renderGlyphs();
+  }
+
+  /* ---------- cohort glyphs ---------- */
+  var glyphsEl = document.getElementById('glyphs');
+  var glyphCountEl = document.getElementById('glyphCount');
+  var glyphNodes = [];
+  function renderGlyphs() {
+    glyphsEl.innerHTML = '';
+    glyphNodes = [];
+    for (var i = 0; i < state.n; i++) {
+      var g = document.createElement('div');
+      var v = (i * 7 + 3) % 6;
+      g.className = 'glyph v' + v;
+      glyphsEl.appendChild(g);
+      glyphNodes.push(g);
+    }
+    glyphCountEl.textContent = state.n;
+  }
+
+  /* ---------- form bindings ---------- */
+  document.querySelectorAll('[data-key]').forEach(function (el) {
+    el.addEventListener('input', function () {
+      state[el.dataset.key] = el.value;
+      render();
+    });
+  });
+
+  function bindSeg(id, key) {
+    var seg = document.getElementById(id);
+    seg.querySelectorAll('button').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var already = btn.getAttribute('aria-pressed') === 'true';
+        seg.querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', 'false'); });
+        if (already) { state[key] = ''; }
+        else { btn.setAttribute('aria-pressed', 'true'); state[key] = btn.dataset.val; }
+        render();
+      });
+    });
+  }
+  bindSeg('pType', 'product_type');
+  bindSeg('aTech', 'tech_literacy');
+
+  var nVal = document.getElementById('nVal');
+  function setN(n) {
+    state.n = Math.min(12, Math.max(2, n));
+    nVal.textContent = state.n;
+    render();
+  }
+  document.getElementById('nMinus').addEventListener('click', function () { setN(state.n - 1); });
+  document.getElementById('nPlus').addEventListener('click', function () { setN(state.n + 1); });
+
+  /* ---------- copy ---------- */
+  var btnCopy = document.getElementById('btnCopy');
+  btnCopy.addEventListener('click', function () {
+    var text = buildPlain();
+    function done() {
+      btnCopy.textContent = 'Copied';
+      btnCopy.classList.add('copied');
+      setTimeout(function () {
+        btnCopy.textContent = 'Copy prompt';
+        btnCopy.classList.remove('copied');
+      }, 1600);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text); done(); });
+    } else { fallbackCopy(text); done(); }
+  });
+  function fallbackCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+
+  /* ---------- example / clear ---------- */
+  var example = {
+    product_name: 'PulsePad home blood pressure monitor',
+    product_type: 'hybrid',
+    description: 'An upper-arm blood pressure cuff that syncs readings over Bluetooth to a companion phone app, which tracks trends and shares reports with a physician.',
+    core_flow: 'Unbox device, install cuff batteries, download app, pair via Bluetooth, complete setup wizard (account, units, physician email), take a daily seated reading, review trend chart weekly.',
+    constraints: '1.2 inch monochrome display on the cuff, $89 price point, requires a smartphone with Bluetooth, app text defaults to 14pt.',
+    age_range: '65 to 80',
+    occupations: 'retired; some part-time retail or volunteer work',
+    conditions: 'mild arthritis in hands, mild presbyopia (reading glasses), occasional hand tremor',
+    tech_literacy: 'low',
+    locale: 'English, US Midwest',
+    other_traits: 'fixed income, lives alone or with spouse, prescribed home monitoring by a physician, moderate motivation but low patience for setup',
+    n: 6
+  };
+
+  function applyState() {
+    document.querySelectorAll('[data-key]').forEach(function (el) {
+      el.value = state[el.dataset.key] || '';
+    });
+    ['pType', 'aTech'].forEach(function (id) {
+      var key = id === 'pType' ? 'product_type' : 'tech_literacy';
+      document.getElementById(id).querySelectorAll('button').forEach(function (b) {
+        b.setAttribute('aria-pressed', b.dataset.val === state[key] ? 'true' : 'false');
+      });
+    });
+    nVal.textContent = state.n;
+    render();
+  }
+
+  document.getElementById('btnExample').addEventListener('click', function () {
+    Object.keys(example).forEach(function (k) { state[k] = example[k]; });
+    applyState();
+  });
+  document.getElementById('btnClear').addEventListener('click', function () {
+    Object.keys(state).forEach(function (k) { state[k] = k === 'n' ? 8 : ''; });
+    applyState();
+  });
+
+  /* ==================== SIMULATION ENGINE ==================== */
+  var running = false;
+  var btnRun = document.getElementById('btnRun');
+  var runSection = document.getElementById('runSection');
+  var statusEl = document.getElementById('status');
+  var personaResults = document.getElementById('personaResults');
+  var synthesisCard = document.getElementById('synthesisCard');
+  var synthesisBody = document.getElementById('synthesisBody');
+
+  function setStatus(msg, busy, isError) {
+    statusEl.className = 'status' + (isError ? ' error' : '');
+    statusEl.innerHTML = (busy ? '<span class="pulse"></span>' : '') + esc(msg);
+  }
+
+  function renderMd(container, text) {
+    if (window.marked) {
+      container.innerHTML = marked.parse(text);
+    } else {
+      var pre = document.createElement('pre');
+      pre.style.whiteSpace = 'pre-wrap';
+      pre.textContent = text;
+      container.innerHTML = '';
+      container.appendChild(pre);
+    }
+  }
+
+  async function callClaude(prompt) {
+    var headers = { 'Content-Type': 'application/json' };
+    var key = (document.getElementById('apiKey').value || '').trim();
+    if (key) {
+      headers['x-api-key'] = key;
+      headers['anthropic-version'] = '2023-06-01';
+      headers['anthropic-dangerous-direct-browser-access'] = 'true';
+    }
+    var response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    var data = await response.json();
+    if (data.error) throw new Error(data.error.message || 'API request failed');
+    return (data.content || [])
+      .filter(function (b) { return b.type === 'text'; })
+      .map(function (b) { return b.text; })
+      .join('\n');
+  }
+
+  function parseJsonArray(text) {
+    var clean = text.replace(/```json|```/g, '').trim();
+    var start = clean.indexOf('[');
+    var end = clean.lastIndexOf(']');
+    if (start === -1 || end === -1) throw new Error('Could not parse persona list');
+    return JSON.parse(clean.slice(start, end + 1));
+  }
+
+  async function generatePersonas(total) {
+    var personas = [];
+    var batchSize = 5;
+    while (personas.length < total) {
+      var need = Math.min(batchSize, total - personas.length);
+      var existing = personas.map(function (p) { return p.name + ' (' + p.summary + ')'; }).join('; ');
+      var prompt =
+        'You are generating synthetic user personas for a product usability simulation.\n\n' +
+        productBlock() + '\n\n' + audienceBlock() + '\n\n' +
+        'Generate exactly ' + need + ' distinct personas consistent with the audience parameters. ' +
+        'Vary secondary traits (patience, prior tech experience, specific sub-condition severity, context of use) so the set reflects realistic within-group diversity.\n' +
+        (existing ? 'These personas already exist in the cohort, so make the new ones clearly different from them: ' + existing + '\n' : '') +
+        '\nRespond ONLY with a JSON array, no markdown fences, no preamble. Each object must have exactly these string fields:\n' +
+        '- "name": first name and age, e.g. "Ruth, 72"\n' +
+        '- "summary": one short line of who they are (occupation/household)\n' +
+        '- "traits": 2-3 sentences covering their relevant condition severity, tech experience, patience level, and context of use';
+      var raw = await callClaude(prompt);
+      var batch = parseJsonArray(raw);
+      personas = personas.concat(batch.slice(0, need));
+    }
+    return personas;
+  }
+
+  async function simulatePersona(persona) {
+    var prompt =
+      'You are a user-research simulation engine producing an evidence-grounded prediction of how one specific user interacts with a product.\n\n' +
+      productBlock() + '\n\n' +
+      '<persona>\n' +
+      'Name: ' + persona.name + '\n' +
+      'Who: ' + persona.summary + '\n' +
+      'Traits: ' + persona.traits + '\n' +
+      '</persona>\n\n' +
+      'Simulate a step-by-step walkthrough of the core interaction flow for this persona. For each step of the flow, cover:\n' +
+      '- What they notice first\n' +
+      '- Where friction, confusion, or delay is likely and why, tied to a specific trait (e.g. "small tap targets + arthritis"), never a generic "may struggle"\n' +
+      '- What they do next (proceed, retry, abandon, seek help, misuse the feature)\n' +
+      '- Their emotional/confidence state at the end of the step\n\n' +
+      'End with one line: "Outcome:" stating whether they completed the flow, abandoned, or needed help, and at which step.\n\n' +
+      'Format as concise Markdown with a bolded heading per step and short bullet points. Stay under 300 words total.';
+    return callClaude(prompt);
+  }
+
+  async function synthesize(personas, walkthroughs) {
+    var joined = personas.map(function (p, i) {
+      return '### ' + p.name + ' (' + p.summary + ')\n' + walkthroughs[i];
+    }).join('\n\n');
+    var prompt =
+      'You are synthesizing the results of a simulated usability study. Below are step-by-step walkthroughs for a cohort of ' + personas.length + ' synthetic personas using the same product.\n\n' +
+      productBlock() + '\n\n' +
+      '<walkthroughs>\n' + joined + '\n</walkthroughs>\n\n' +
+      'Produce a synthesis in Markdown with exactly these sections:\n' +
+      '1. **Common friction points**: issues that appeared across multiple personas, with the fraction of the cohort that hit each (e.g. "4 of ' + personas.length + '")\n' +
+      '2. **Outlier issues**: persona-specific problems a "typical user" test would miss\n' +
+      '3. **Top design changes**: a ranked list of the 3-5 design or accessibility changes that would most reduce friction across the cohort, with one line of rationale each\n' +
+      '4. **Assumptions**: any assumptions made where the audience parameters were ambiguous or underspecified\n\n' +
+      'Be concise. Stay under 400 words. Do not restate the walkthroughs.';
+    return callClaude(prompt);
+  }
+
+  function personaCard(index, persona) {
+    var card = document.createElement('details');
+    card.className = 'persona-card';
+    card.innerHTML =
+      '<summary><span class="idx">' + (index + 1) + '</span>' +
+      '<span>' + esc(persona.name) + ' <span class="meta">' + esc(persona.summary) + '</span></span>' +
+      '<span class="chev">&#8250;</span></summary>' +
+      '<div class="persona-body"><div class="md"></div></div>';
+    personaResults.appendChild(card);
+    return card.querySelector('.md');
+  }
+
+  btnRun.addEventListener('click', async function () {
+    if (running) return;
+    running = true;
+    btnRun.disabled = true;
+    btnRun.textContent = 'Running...';
+    runSection.hidden = false;
+    personaResults.innerHTML = '';
+    synthesisCard.hidden = true;
+    synthesisBody.innerHTML = '';
+    glyphNodes.forEach(function (g) { g.classList.remove('done', 'active'); });
+    runSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    try {
+      setStatus('Generating ' + state.n + ' personas...', true);
+      var personas = await generatePersonas(state.n);
+
+      var walkthroughs = [];
+      for (var i = 0; i < personas.length; i++) {
+        if (glyphNodes[i]) glyphNodes[i].classList.add('active');
+        setStatus('Simulating persona ' + (i + 1) + ' of ' + personas.length + ': ' + personas[i].name, true);
+        var mdTarget = personaCard(i, personas[i]);
+        var result = await simulatePersona(personas[i]);
+        walkthroughs.push(result);
+        renderMd(mdTarget, result);
+        if (glyphNodes[i]) { glyphNodes[i].classList.remove('active'); glyphNodes[i].classList.add('done'); }
+      }
+
+      setStatus('Synthesizing findings across the cohort...', true);
+      var synthesis = await synthesize(personas, walkthroughs);
+      renderMd(synthesisBody, synthesis);
+      synthesisCard.hidden = false;
+      setStatus('Done. ' + personas.length + ' personas simulated.', false);
+    } catch (err) {
+      var msg = err.message || 'Unknown error';
+      if (/Failed to fetch|NetworkError|Load failed/i.test(msg)) {
+        var hasKey = (document.getElementById('apiKey').value || '').trim().length > 0;
+        msg = hasKey
+          ? 'Could not reach api.anthropic.com. Check the key and your network, then try again.'
+          : 'Could not reach the Claude API. If you opened this file outside claude.ai, paste an Anthropic API key in the field above the Run button and try again.';
+      }
+      setStatus('Error: ' + msg, false, true);
+    } finally {
+      running = false;
+      btnRun.disabled = false;
+      btnRun.textContent = 'Run again';
+    }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
